@@ -1043,8 +1043,8 @@ def main():
         install_slurm()
 
         try:
-            subprocess.call("{}/slurm/scripts/custom-controller-install"
-                            .format(APPS_DIR))
+            subprocess.call("sudo {}/slurm/scripts/custom-controller-install 2>&1 > ~/install.log"
+                            .format(APPS_DIR), shell=True, executable='/bin/bash')
         except Exception:
             # Ignore blank files with no shell magic.
             pass
@@ -1102,8 +1102,8 @@ def main():
         start_munge()
 
         try:
-            subprocess.call("{}/slurm/scripts/custom-compute-install"
-                            .format(APPS_DIR))
+            subprocess.call("sudo {}/slurm/scripts/custom-compute-install 2>&1 > ~/install.log"
+                            .format(APPS_DIR), shell=True, executable='/bin/bash')
         except Exception:
             # Ignore blank files with no shell magic.
             pass
