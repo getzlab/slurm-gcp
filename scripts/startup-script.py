@@ -348,8 +348,10 @@ def expand_machine_type():
         if type_resp:
             tot_cpus = type_resp['guestCpus']
             if tot_cpus > 1:
-                machine['cores']   = tot_cpus / 2
-                machine['threads'] = 2
+                # machine['cores']   = tot_cpus / 2
+                # machine['threads'] = 2
+                # Allocate threads as individual cores because hyper-threading
+                machine['cores'] = tot_cpus
 
             # Because the actual memory on the host will be different than what
             # is configured (e.g. kernel will take it). From experiments, about
@@ -484,7 +486,7 @@ DefMemPerCPU={def_mem_per_cpu}
 #SchedulerTimeSlice=30
 SchedulerType=sched/backfill
 SelectType=select/cons_res
-SelectTypeParameters=CR_Core_Memory
+SelectTypeParameters=CR_CPU_Memory
 #
 #
 # JOB PRIORITY
@@ -555,9 +557,9 @@ CommunicationParameters=NoAddrCache
         conf += "GresTypes=gpu\n"
 
     conf += ' '.join(("NodeName=DEFAULT",
-                      "Sockets="        + str(machine['sockets']),
-                      "CoresPerSocket=" + str(machine['cores']),
-                      "ThreadsPerCore=" + str(machine['threads']),
+                      # "Sockets="        + str(machine['sockets']),
+                      "CPUs=" + str(machine['cores']),
+                      # "ThreadsPerCore=" + str(machine['threads']),
                       "RealMemory="     + str(machine['memory']),
                       "State=UNKNOWN"))
 
