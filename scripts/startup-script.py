@@ -23,6 +23,7 @@ import subprocess
 import time
 import urllib
 import urllib2
+import tempfile
 
 CLUSTER_NAME      = '@CLUSTER_NAME@'
 MACHINE_TYPE      = '@MACHINE_TYPE@' # e.g. n1-standard-1, n1-starndard-2
@@ -535,7 +536,7 @@ SuspendProgram={apps_dir}/slurm/scripts/suspend.py
 ResumeProgram={apps_dir}/slurm/scripts/resume.py
 ResumeFailProgram={apps_dir}/slurm/scripts/suspend.py
 SuspendTimeout=600
-ResumeTimeout=1800
+ResumeTimeout=1200
 ResumeRate=0
 #SuspendExcNodes=
 #SuspendExcParts=
@@ -984,13 +985,98 @@ def create_compute_image():
         time.sleep(300)
 
     print "Creating compute image..."
-    hostname = socket.gethostname()
-    subprocess.call(shlex.split("gcloud compute images "
-                                "create {0}-compute-image-{3} "
-                                "--source-disk {1} "
-                                "--source-disk-zone {2} --force "
-                                "--family {0}-compute-image-family".format(
-                                    CLUSTER_NAME, hostname, ZONE, ver)))
+    # STARTUP_SCRIPT = "'#!/bin/bash'$'\\n''{slurm_dir}/bin/scontrol update partitionname={part} state=up'$'\\n''gcloud compute instances delete --zone {zone} {name}-cluster-starter --delete-disks boot --quiet'".format(
+    #     slurm_dir=CURR_SLURM_DIR,
+    #     part=DEF_PART_NAME,
+    #     zone=ZONE,
+    #     name=CLUSTER_NAME
+    # )
+    # 1) Create an initial image. Likely will work, but may be broken depending on disk state
+    subprocess.call(shlex.split(
+        "gcloud compute images "
+        "create {0}-compute-image-{3} "
+        "--source-disk {1} "
+        "--source-disk-zone {2} --force "
+        "--family {0}-compute-image-family\n".format(
+            CLUSTER_NAME, socket.gethostname(), ZONE, ver)
+    ))
+    # 2) Boot a new VM which will stop this one and create a new image
+    with tempfile.NamedTemporaryFile('w') as w:
+        w.write('#!/bin/bash\n')
+        # 2.a) Stop the compute-image vm
+        w.write(
+            'gcloud compute instances stop --zone {zone} {name}-compute-image\n'.format(
+                zone=ZONE,
+                name=CLUSTER_NAME
+            )
+        )
+        # 2.b) Create the final image
+        w.write(
+            "gcloud compute images "
+            "create {0}-compute-image-{3}-final "
+            "--source-disk {1} "
+            "--source-disk-zone {2} --force "
+            "--family {0}-compute-image-family\n".format(
+                CLUSTER_NAME, socket.gethostname(), ZONE, ver)
+        )
+        # 2.c) Delete the original image
+        w.write(
+            "gcloud compute images "
+            "delete {}-compute-image-{}\n".format(
+                CLUSTER_NAME, ver)
+        )
+        # w.write(
+        #     'gcloud compute instances create {name}-cluster-starter '
+        #     '--zone {zone} --image {name}-compute-image-{version} '
+        #     '--boot-disk-type pd-standard --machine-type f1-micro --async '
+        #     "--metadata-from-file startup-script=<(echo {startup_script}) "
+        #     '--network-interface subnet=projects/{project}/regions/{region}/subnetworks/default '
+        #     '--scopes https://www.googleapis.com/auth/cloud-platform\n'.format(
+        #         name=CLUSTER_NAME,
+        #         zone=ZONE,
+        #         version=ver,
+        #         startup_script=STARTUP_SCRIPT,
+        #         project=PROJECT,
+        #         region=ZONE[:-2], #strip "-[a-z]" from end of zone
+        #     )
+        # )
+        # 2.d) Delete the compute-image vm
+        w.write(
+            'gcloud compute instances delete --zone {zone} {name}-compute-image --delete-disks boot --quiet\n'.format(
+                zone=ZONE,
+                name=CLUSTER_NAME
+            )
+        )
+        # 2.e) Delete this VM
+        w.write(
+            'gcloud compute instances delete --zone {zone} {name}-image-taker --delete-disks boot --quiet\n'.format(
+                zone=ZONE,
+                name=CLUSTER_NAME
+            )
+        )
+        w.flush()
+        # 3) Mark partition up. If we're lucky, the initial image will work
+        # If we're not, the final image will be ready shortly
+        subprocess.call(shlex.split(
+            '{slurm_dir}/bin/scontrol update partitionname={part} state=up'.format(
+                slurm_dir=CURR_SLURM_DIR,
+                part=DEF_PART_NAME,
+            )
+        ))
+        # 4) Start that image-taker vm
+        subprocess.call(shlex.split(
+            'gcloud compute instances create {name}-image-taker '
+            '--zone {zone} --image-family ubuntu-1604-lts --image-project ubuntu-os-cloud '
+            '--boot-disk-type pd-standard --machine-type f1-micro '
+            '--metadata-from-file startup-script={script_path} '
+            '--scopes https://www.googleapis.com/auth/cloud-platform\n'.format(
+                name=CLUSTER_NAME,
+                zone=ZONE,
+                script_path=w.name
+            )
+        ))
+
+
 #END create_compute_image()
 
 
@@ -1115,14 +1201,6 @@ def main():
 
         if hostname == CLUSTER_NAME + "-compute-image":
             create_compute_image()
-
-            subprocess.call(shlex.split(
-                "{}/bin/scontrol update partitionname={} state=up".format(
-                    CURR_SLURM_DIR, DEF_PART_NAME)))
-
-            subprocess.call(shlex.split("gcloud compute instances "
-                                        "delete {} --zone {} --quiet".format(
-                                            hostname, ZONE)))
         else:
             subprocess.call(shlex.split('systemctl start slurmd'))
 
