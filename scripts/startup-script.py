@@ -949,6 +949,7 @@ def mount_nfs_vols():
     while subprocess.call(['mount', '-a']):
         print "Waiting for " + APPS_DIR + " and /home to be mounted"
         time.sleep(5)
+    subprocess.call(shlex.split("sudo chmod a+w /mnt/disks/sec"))
 
 #END mount_nfs_vols()
 
