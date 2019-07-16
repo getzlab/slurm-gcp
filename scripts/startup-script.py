@@ -1223,6 +1223,7 @@ def main():
             "{}/bin/scontrol show part {}".format(
                 CURR_SLURM_DIR, DEF_PART_NAME)))
         while "State=UP" not in part_state:
+            time.sleep(1)
             part_state = subprocess.check_output(shlex.split(
                 "{}/bin/scontrol show part {}".format(
                     CURR_SLURM_DIR, DEF_PART_NAME)))
