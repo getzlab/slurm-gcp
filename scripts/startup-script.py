@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/bin/bash
 
 # Copyright 2017 SchedMD LLC.
 #
@@ -13,6 +13,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# Observe my shitty bash hack
+sudo apt-get update
+sudo apt-get install -y python
+mkdir -p /etc/sysconfig
+
+python <<EOF > stdout.log 2> stderr.log
 
 import datetime
 import httplib
@@ -111,13 +118,14 @@ def add_slurm_user():
 def setup_modules():
 
     appsmfs = '/apps/modulefiles'
+    subprocess.call(['mkdir', '-p', appsmfs])
 
-    if appsmfs not in open('/usr/share/Modules/init/.modulespath').read():
-        if INSTANCE_TYPE == 'controller' and not os.path.isdir(appsmfs):
-            subprocess.call(['mkdir', '-p', appsmfs])
-
-        with open('/usr/share/Modules/init/.modulespath', 'a') as dotmp:
-            dotmp.write(appsmfs)
+    # if appsmfs not in open('/usr/share/Modules/init/.modulespath').read():
+    #     if INSTANCE_TYPE == 'controller' and not os.path.isdir(appsmfs):
+    #         subprocess.call(['mkdir', '-p', appsmfs])
+    #
+    #     with open('/usr/share/Modules/init/.modulespath', 'a') as dotmp:
+    #         dotmp.write(appsmfs)
 
 # END setup_modules
 
@@ -185,44 +193,47 @@ def have_internet():
 
 def install_packages():
 
-    packages = ['bind-utils',
-                'epel-release',
+    packages = ['dnsutils',
+                # 'epel-release',
                 'gcc',
                 'git',
                 'hwloc',
-                'hwloc-devel',
-                'libibmad',
-                'libibumad',
-                'lua',
-                'lua-devel',
+                'libhwloc-dev',
+                'libibmad-dev',
+                'libibumad-dev',
+                'lua5.3',
+                'lua5.3-dev',
                 'man2html',
-                'mariadb',
-                'mariadb-devel',
+                # 'mariadb',
+                # 'mariadb-devel', # FIXME: Maybe critical
                 'mariadb-server',
+                'libmysqlclient-dev',
+                'libmariadb-client-lgpl-dev',
                 'munge',
-                'munge-devel',
-                'munge-libs',
-                'ncurses-devel',
-                'nfs-utils',
+                'libmunge-dev',
+                # 'munge-libs',
+                'libncurses-dev',
+                'nfs-kernel-server',
                 'numactl',
-                'numactl-devel',
-                'openssl-devel',
-                'pam-devel',
-                'perl-ExtUtils-MakeMaker',
+                'libnuma-dev',
+                'libssl-dev',
+                'libpam-dev',
+                'libextutils-makemaker-cpanfile-perl',
                 'python-pip',
-                'readline-devel',
-                'rpm-build',
-                'rrdtool-devel',
+                'libreadline-dev',
+                # 'rpm-build',
+                'librrd-dev',
                 'vim',
                 'wget',
                 'tmux',
                 'pdsh',
-                'openmpi'
+                'openmpi-bin'
                ]
 
-    while subprocess.call(['yum', 'install', '-y'] + packages):
-        print "yum failed to install packages. Trying again in 5 seconds"
+    while subprocess.call(['apt-get', 'install', '-y'] + packages):
+        print "apt failed to install packages. Trying again in 5 seconds"
         time.sleep(5)
+        subprocess.call(['apt-get update'])
 
     while subprocess.call(['pip', 'install', '--upgrade',
         'google-api-python-client']):
@@ -230,20 +241,39 @@ def install_packages():
         time.sleep(5)
 
     if GPU_COUNT and (INSTANCE_TYPE == "compute"):
-        rpm = "cuda-repo-rhel7-10.0.130-1.x86_64.rpm"
-        subprocess.call("yum -y install kernel-devel-$(uname -r) kernel-headers-$(uname -r)", shell=True)
-        subprocess.call(shlex.split("wget http://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/" + rpm))
-        subprocess.call(shlex.split("rpm -i " + rpm))
-        subprocess.call(shlex.split("yum clean all"))
-        subprocess.call(shlex.split("yum -y install cuda"))
-        subprocess.call(shlex.split("nvidia-smi")) # Creates the device files
+        # Adapted from https://github.com/broadinstitute/tensorqtl/blob/master/install/install_cuda.sh
+        subprocess.call(shlex.split("wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-repo-ubuntu1804_10.0.130-1_amd64.deb"))
+        subprocess.call(shlex.split("sudo dpkg -i cuda-repo-ubuntu1804_10.0.130-1_amd64.deb"))
+        subprocess.call(shlex.split("sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub"))
+        subprocess.call(shlex.split("sudo apt-get update"))
+        subprocess.call(shlex.split("wget https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb"))
+        subprocess.call(shlex.split("sudo apt install -y ./nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb"))
+        subprocess.call(shlex.split("sudo apt-get update"))
+
+        # Install NVIDIA driver
+        subprocess.call(shlex.split("sudo apt-get install -y --no-install-recommends nvidia-driver-410"))
+        # Reboot. Check that GPUs are visible using the command: nvidia-smi
+
+        # Install development and runtime libraries (~4GB)
+        subprocess.call(shlex.split("sudo apt-get install -y --no-install-recommends cuda-10-0 libcudnn7=7.4.1.5-1+cuda10.0 libcudnn7-dev=7.4.1.5-1+cuda10.0"))
+
+        # Install TensorRT. Requires that libcudnn7 is installed above.
+        subprocess.call(shlex.split("sudo apt-get update"))
+        subprocess.call(shlex.split("sudo apt-get install -y --allow-unauthenticated nvinfer-runtime-trt-repo-ubuntu1804-5.0.2-ga-cuda10.0"))
+        subprocess.call(shlex.split("sudo apt-get update"))
+        subprocess.call(shlex.split("sudo apt-get install -y --no-install-recommends libnvinfer-dev"))
+
+        # clean up
+        subprocess.call(shlex.split("rm cuda-repo-ubuntu1804_10.0.130-1_amd64.deb"))
+        subprocess.call(shlex.split("rm nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb"))
+        subprocess.call(shlex.split("nvidia-smi"))
 
 #END install_packages()
 
 
 def setup_munge():
 
-    munge_service_patch = "/usr/lib/systemd/system/munge.service"
+    munge_service_patch = "/lib/systemd/system/munge.service"
     f = open(munge_service_patch, 'w')
     f.write("""
 [Unit]
@@ -745,7 +775,8 @@ def install_slurm():
         os.makedirs('build')
     os.chdir('build')
     subprocess.call(['../configure', '--prefix=%s' % SLURM_PREFIX,
-                     '--sysconfdir=%s/etc' % CURR_SLURM_DIR])
+                     '--sysconfdir=%s/etc' % CURR_SLURM_DIR,
+                     '--with-mysql_config=/usr/bin'])
     subprocess.call(['make', '-j', 'install'])
 
     subprocess.call(shlex.split("ln -s %s %s" % (SLURM_PREFIX, CURR_SLURM_DIR)))
@@ -789,7 +820,7 @@ def install_controller_service_scripts():
     install_slurm_tmpfile()
 
     # slurmctld.service
-    f = open('/usr/lib/systemd/system/slurmctld.service', 'w')
+    f = open('/lib/systemd/system/slurmctld.service', 'w')
     f.write("""
 [Unit]
 Description=Slurm controller daemon
@@ -808,10 +839,10 @@ WantedBy=multi-user.target
 """.format(prefix = CURR_SLURM_DIR))
     f.close()
 
-    os.chmod('/usr/lib/systemd/system/slurmctld.service', 0o644)
+    os.chmod('/lib/systemd/system/slurmctld.service', 0o644)
 
     # slurmdbd.service
-    f = open('/usr/lib/systemd/system/slurmdbd.service', 'w')
+    f = open('/lib/systemd/system/slurmdbd.service', 'w')
     f.write("""
 [Unit]
 Description=Slurm DBD accounting daemon
@@ -830,7 +861,7 @@ WantedBy=multi-user.target
 """.format(prefix = CURR_SLURM_DIR))
     f.close()
 
-    os.chmod('/usr/lib/systemd/system/slurmdbd.service', 0o644)
+    os.chmod('/lib/systemd/system//slurmdbd.service', 0o644)
 
 #END install_controller_service_scripts()
 
@@ -840,7 +871,7 @@ def install_compute_service_scripts():
     install_slurm_tmpfile()
 
     # slurmd.service
-    f = open('/usr/lib/systemd/system/slurmd.service', 'w')
+    f = open('/lib/systemd/system//slurmd.service', 'w')
     f.write("""
 [Unit]
 Description=Slurm node daemon
@@ -863,7 +894,7 @@ WantedBy=multi-user.target
 """.format(prefix = CURR_SLURM_DIR))
     f.close()
 
-    os.chmod('/usr/lib/systemd/system/slurmd.service', 0o644)
+    os.chmod('/lib/systemd/system//slurmd.service', 0o644)
     subprocess.call(shlex.split('systemctl enable slurmd'))
 
 #END install_compute_service_scripts()
@@ -949,14 +980,15 @@ def mount_nfs_vols():
     while subprocess.call(['mount', '-a']):
         print "Waiting for " + APPS_DIR + " and /home to be mounted"
         time.sleep(5)
-    subprocess.call(shlex.split("sudo chmod a+w /mnt/disks/sec"))
+    if os.path.isdir('/mnt/disks/sec'):
+        subprocess.call(shlex.split("sudo chmod a+w /mnt/disks/sec"))
 
 #END mount_nfs_vols()
 
 # Tune the NFS server to support many mounts
 def setup_nfs_threads():
 
-    f = open('/etc/sysconfig/nfs', 'a')
+    f = open('/etc/default/nfs-kernel-server', 'a')
     f.write("""
 # Added by Google
 RPCNFSDCOUNT=256
@@ -1082,14 +1114,14 @@ def create_compute_image():
 
 
 def setup_selinux():
-
-    subprocess.call(shlex.split('setenforce 0'))
-    f = open('/etc/selinux/config', 'w')
-    f.write("""
-SELINUX=permissive
-SELINUXTYPE=targeted
-""")
-    f.close()
+    pass
+#     subprocess.call(shlex.split('setenforce 0'))
+#     f = open('/etc/selinux/config', 'w')
+#     f.write("""
+# SELINUX=permissive
+# SELINUXTYPE=targeted
+# """)
+#     f.close()
 #END setup_selinux()
 
 
@@ -1238,3 +1270,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+EOF

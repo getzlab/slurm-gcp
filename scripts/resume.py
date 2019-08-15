@@ -244,7 +244,7 @@ def main(arg_nodes):
         have_compute_img = True
     except:
         image_response = compute.images().getFromFamily(
-            project='centos-cloud', family='centos-7').execute()
+            project='ubuntu-os-cloud', family='ubuntu-1804-lts').execute()
         source_disk_image = image_response['selfLink']
 
     while True:
