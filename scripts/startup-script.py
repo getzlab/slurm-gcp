@@ -18,8 +18,10 @@
 sudo apt-get update
 sudo apt-get install -y python
 mkdir -p /etc/sysconfig
+touch stdout.log stderr.log
+chmod 644 stdout.log stderr.log
 
-python <<EOF > stdout.log 2> stderr.log
+python <<\EOF >> stdout.log 2>> stderr.log
 
 import datetime
 import httplib
@@ -120,12 +122,12 @@ def setup_modules():
     appsmfs = '/apps/modulefiles'
     subprocess.call(['mkdir', '-p', appsmfs])
 
-    # if appsmfs not in open('/usr/share/Modules/init/.modulespath').read():
-    #     if INSTANCE_TYPE == 'controller' and not os.path.isdir(appsmfs):
-    #         subprocess.call(['mkdir', '-p', appsmfs])
-    #
-    #     with open('/usr/share/Modules/init/.modulespath', 'a') as dotmp:
-    #         dotmp.write(appsmfs)
+    if appsmfs not in open('/usr/share/modules/init/.modulespath').read():
+        if INSTANCE_TYPE == 'controller' and not os.path.isdir(appsmfs):
+            subprocess.call(['mkdir', '-p', appsmfs])
+
+        with open('/usr/share/modules/init/.modulespath', 'a') as dotmp:
+            dotmp.write(appsmfs)
 
 # END setup_modules
 
@@ -198,6 +200,7 @@ def install_packages():
                 'gcc',
                 'git',
                 'hwloc',
+                'environment-modules',
                 'libhwloc-dev',
                 'libibmad-dev',
                 'libibumad-dev',
@@ -225,6 +228,7 @@ def install_packages():
                 'librrd-dev',
                 'vim',
                 'wget',
+                'tcl',
                 'tmux',
                 'pdsh',
                 'openmpi-bin'
@@ -233,10 +237,10 @@ def install_packages():
     while subprocess.call(['apt-get', 'install', '-y'] + packages):
         print "apt failed to install packages. Trying again in 5 seconds"
         time.sleep(5)
-        subprocess.call(['apt-get update'])
+        subprocess.call(['apt-get', 'update'])
 
     while subprocess.call(['pip', 'install', '--upgrade',
-        'google-api-python-client']):
+        'google-api-python-client', 'google-auth']):
         print "failed to install google python api client. Trying again 5 seconds."
         time.sleep(5)
 
@@ -360,20 +364,22 @@ def expand_machine_type():
     # packages while this script is running and do not have the benefit of
     # restarting the interpreter for it to do it's usual startup sequence to
     # configure import magic.
+    print "Fetching machine type: %s" % MACHINE_TYPE
     import sys
     import site
     for path in [x for x in sys.path if 'site-packages' in x]:
         site.addsitedir(path)
-
-    import googleapiclient.discovery
 
     # Assume sockets is 1. Currently, no instances with multiple sockets
     # Assume hyper-threading is on and 2 threads per core
     machine = {'sockets': 1, 'cores': 1, 'threads': 1, 'memory': 1}
 
     try:
-        compute = googleapiclient.discovery.build('compute', 'v1',
-                                                  cache_discovery=False)
+        reload(site)
+        import google.auth
+        import googleapiclient.discovery
+
+        compute = googleapiclient.discovery.build('compute', 'v1', cache_discovery=False)
         type_resp = compute.machineTypes().get(project=PROJECT, zone=ZONE,
                 machineType=MACHINE_TYPE).execute()
         if type_resp:
@@ -393,6 +399,8 @@ def expand_machine_type():
 
     except Exception, e:
         print "Failed to get MachineType '%s' from google api (%s)" % (MACHINE_TYPE, str(e))
+
+    print "Final machine conf: %s" % repr(machine)
 
     return machine
 #END expand_machine_type()
@@ -902,6 +910,49 @@ WantedBy=multi-user.target
 
 def setup_bash_profile():
 
+    print "Setting up slurm profile"
+
+    f = open('/etc/profile', 'w')
+    f.write("""
+# /etc/profile: system-wide .profile file for the Bourne shell (sh(1))
+# and Bourne compatible shells (bash(1), ksh(1), ash(1), ...).
+if [ "${PS1-}" ]; then
+  if [ "${BASH-}" ] && [ "$BASH" != "/bin/sh" ]; then
+    # The file bash.bashrc already sets the default PS1.
+    # PS1='\h:\w\$ '
+    if [ -f /etc/bash.bashrc ]; then
+      . /etc/bash.bashrc
+    fi
+  else
+    if [ "`id -u`" -eq 0 ]; then
+      PS1='# '
+    else
+      PS1='$ '
+    fi
+  fi
+fi
+""")
+
+    f = open('/etc/bash.bashrc', 'r')
+    text = f.read()
+    f.close()
+
+    f = open('/etc/bash.bashrc', 'w')
+    f.write("""
+# Shim to load profile.d always
+for i in /etc/profile.d/*.sh; do
+if [ -r "$i" ]; then
+    if [ "${-#*i}" != "$-" ]; then
+        . "$i"
+    else
+        . "$i" >/dev/null
+    fi
+fi
+done
+""")
+    f.write(text)
+    f.close()
+
     f = open('/etc/profile.d/slurm.sh', 'w')
     f.write("""
 S_PATH=%s
@@ -1010,6 +1061,13 @@ def setup_slurmd_cronjob():
 
 def create_compute_image():
 
+    print "Waiting for slurmctl sync"
+
+    while not os.path.isfile("/apps/slurm/install.complete"):
+        time.sleep(10)
+
+    subprocess.call(['systemctl', 'restart', 'munge'])
+
     end_motd(False)
     subprocess.call("sync")
     ver = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -1082,7 +1140,7 @@ def create_compute_image():
         )
         # 2.e) Delete this VM
         w.write(
-            'gcloud compute instances delete --zone {zone} {name}-image-taker --delete-disks boot --quiet\n'.format(
+            'gcloud compute instances delete --zone {zone} {name}-compute-image-taker --delete-disks boot --quiet\n'.format(
                 zone=ZONE,
                 name=CLUSTER_NAME
             )
@@ -1098,7 +1156,7 @@ def create_compute_image():
         ))
         # 4) Start that image-taker vm
         subprocess.call(shlex.split(
-            'gcloud compute instances create {name}-image-taker '
+            'gcloud compute instances create {name}-compute-image-taker '
             '--zone {zone} --image-family ubuntu-1604-lts --image-project ubuntu-os-cloud '
             '--boot-disk-type pd-standard --machine-type f1-micro '
             '--metadata-from-file startup-script={script_path} '
@@ -1167,7 +1225,7 @@ def main():
         install_slurm()
 
         try:
-            subprocess.call("sudo {}/slurm/scripts/custom-controller-install 2>&1 > ~/install.log"
+            subprocess.call("sudo {}/slurm/scripts/custom-controller-install 2>&1 | sudo tee ~/install.log"
                             .format(APPS_DIR), shell=True, executable='/bin/bash')
         except Exception:
             # Ignore blank files with no shell magic.
@@ -1218,6 +1276,8 @@ def main():
             "{}/bin/scontrol update partitionname={} state=down".format(
                 CURR_SLURM_DIR, DEF_PART_NAME)))
 
+        subprocess.call(['touch', '/apps/slurm/install.complete'])
+
         print "ww Done installing controller"
     elif INSTANCE_TYPE == "compute":
         install_compute_service_scripts()
@@ -1226,7 +1286,7 @@ def main():
         start_munge()
 
         try:
-            subprocess.call("sudo {}/slurm/scripts/custom-compute-install 2>&1 > ~/install.log"
+            subprocess.call("sudo {}/slurm/scripts/custom-compute-install 2>&1 | sudo tee ~/install.log"
                             .format(APPS_DIR), shell=True, executable='/bin/bash')
         except Exception:
             # Ignore blank files with no shell magic.
