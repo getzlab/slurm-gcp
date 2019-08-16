@@ -251,7 +251,7 @@ def install_packages():
         subprocess.call(shlex.split("sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub"))
         subprocess.call(shlex.split("sudo apt-get update"))
         subprocess.call(shlex.split("wget https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb"))
-        subprocess.call(shlex.split("sudo apt install -y ./nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb"))
+        subprocess.call(shlex.split("sudo apt-get install -y ./nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb"))
         subprocess.call(shlex.split("sudo apt-get update"))
 
         # Install NVIDIA driver
