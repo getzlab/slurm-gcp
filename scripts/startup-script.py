@@ -445,7 +445,7 @@ CryptoType=crypto/munge
 #LaunchType=launch/slurm
 #Licenses=foo*4,bar
 #MailProg=/bin/mail
-#MaxJobCount=5000
+MaxJobCount=4000000
 #MaxStepCount=40000
 #MaxTasksPerNode=128
 MpiDefault=none
@@ -523,9 +523,10 @@ FastSchedule=1
 DefMemPerCPU={def_mem_per_cpu}
 #MaxMemPerCPU=0
 #SchedulerTimeSlice=30
-SchedulerType=sched/backfill
+SchedulerType=sched/builtin
 SelectType=select/cons_res
 SelectTypeParameters=CR_CPU_Memory
+MaxArraySize=4000001
 #
 #
 # JOB PRIORITY
@@ -650,6 +651,7 @@ def install_slurmdbd_conf():
 #ArchiveUsage=no
 
 AuthType=auth/munge
+CommitDelay=1
 DbdHost={control_machine}
 DebugLevel=debug2
 
