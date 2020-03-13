@@ -50,30 +50,6 @@ resources:
     - IPProtocol: ICMP
 {% endif %}
 
-{% if (not properties['external_compute_ips'] and not properties['shared_vpc_host_proj']) %}
-- name: {{properties["cluster_name"]}}-router
-  type: compute.v1.router
-  properties:
-  {% if properties['vpc_net'] %}
-    network: https://www.googleapis.com/compute/v1/projects/{{ env["project"] }}/global/networks/{{ properties["vpc_net"]}}
-  {% else %}
-    network: $(ref.{{properties["cluster_name"]}}-slurm-network.selfLink)
-  {% endif %}
-    region: {{ properties["region"] }}
-    nats:
-    - name: {{properties["cluster_name"]}}-nat
-      natIpAllocateOption: "AUTO_ONLY"
-      sourceSubnetworkIpRangesToNat: "LIST_OF_SUBNETWORKS"
-      subnetworks:
-  {% if properties['vpc_net'] %}
-      - name: https://www.googleapis.com/compute/v1/projects/{{ env["project"] }}/regions/{{ properties["region"] }}/subnetworks/{{ properties ["vpc_subnet"] }}
-  {% else %}
-      - name: $(ref.{{properties["cluster_name"]}}-slurm-subnet.selfLink)
-  {% endif %}
-        sourceIpRangesToNat: ["PRIMARY_IP_RANGE"]
-{% endif %}
-
-
 - name: {{properties["cluster_name"]}}-controller
   type: compute.v1.instance
   properties:
@@ -299,11 +275,9 @@ resources:
     networkInterfaces:
     - subnetwork: $(ref.{{properties["cluster_name"]}}-slurm-subnet.selfLink)
   {% endif %}
-  {% if properties['external_compute_ips'] %}
       accessConfigs:
       - name: External NAT
         type: ONE_TO_ONE_NAT
-  {% endif %}
     serviceAccounts:
       - email: "default"
         scopes:
