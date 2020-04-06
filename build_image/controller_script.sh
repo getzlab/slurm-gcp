@@ -169,4 +169,11 @@ PIDFile=/var/run/slurm/slurmdbd.pid
 WantedBy=multi-user.target
 EOF
 
+  systemctl enable mariadb
+  systemctl enable slurmdbd
+  systemctl enable slurmctld
+  systemctl enable nfs-server
+
+  echo "RPCNFSDCOUNT=256" | tee -a /etc/default/nfs-kernel-server
+
 ) > /stdout.log 2> /stderr.log
