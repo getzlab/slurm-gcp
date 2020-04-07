@@ -176,4 +176,11 @@ EOF
 
   echo "RPCNFSDCOUNT=256" | tee -a /etc/default/nfs-kernel-server
 
+  cat > /etc/tmpfiles.d/slurm.conf <<\EOF
+d /var/run/slurm  0755 slurm slurm -
+EOF
+
+  mkdir -p /var/run/slurm
+  chown slurm: /var/run/slurm
+
 ) > /stdout.log 2> /stderr.log
