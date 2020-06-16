@@ -2,7 +2,8 @@
 Prepares all nodes and startup scripts
 """
 
-import argparse
+import shlex
+import time
 import re
 import subprocess
 import os
@@ -43,7 +44,7 @@ def build_node_defs(cluster_name):
     proc = subprocess.run(
         'gcloud compute machine-types list --zones {}'.format(zone),
         shell=True,
-            stdout=subprocess.PIPE
+        stdout=subprocess.PIPE
     )
     mtypes = pd.read_fwf(io.BytesIO(proc.stdout), index_col=0)
     with open('/apps/slurm/current/etc/instance_manifest.tsv', 'w') as manifest:
@@ -61,6 +62,7 @@ def build_node_defs(cluster_name):
                 for j in range(1+(i*n_workers), 1+((1+i)*n_workers)):
                     manifest.write('{}-worker{}\t{}\n'.format(cluster_name, j, name))
                 # NOTE: This weighting system may not be appropriate, but we can always revisit it later
+                # Maybe weight should reflect cost per hour
                 nodes.append('NodeName={name} CPUs={cpu} RealMemory={mem} State=CLOUD Weight={cpu}'.format(
                     name=worker_name,
                     cpu=row.CPUS,
@@ -135,9 +137,10 @@ def main():
     # Determine startup script propagation
     cluster_name = read_meta_key('instance/attributes/canine_conf_cluster_name')
     controller_name = read_meta_key('instance/name')
+    print("Starting cluster", cluster_name, "with controller", controller_name)
     slurm_conf = Config(
         os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
+            (os.path.dirname(__file__)),
             'conf-templates',
             'slurm.conf'
         )
@@ -148,28 +151,33 @@ def main():
     slurm_conf['NODE DEFS'] = '\n'.join(node_defs)
     slurm_conf['PART DEFS'] = '\n'.join(part_defs)
     slurm_conf.write('/apps/slurm/current/etc/slurm.conf')
+    print("Saving slurm conf with", len(node_defs), "node types across", len(part_defs), "partitions")
 
     slurmdbd_conf = Config(
         os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
+            (os.path.dirname(__file__)),
             'conf-templates',
             'slurmdbd.conf'
         )
     )
     slurmdbd_conf['CONTROLLER HOSTNAME'] = controller_name
-    slurmdbd_conf.write("/apps/slurm/current/etc//slurmdbd.conf")
+    slurmdbd_conf.write("/apps/slurm/current/etc/slurmdbd.conf")
+
+    print("Starting services")
 
     subprocess.check_call('systemctl start mariadb', shell=True)
 
     subprocess.check_call(['mysql', '-u', 'root', '-e',
-        "create user 'slurm'@'localhost'"])
+        "create user slurm"])
     subprocess.check_call(['mysql', '-u', 'root', '-e',
-        "grant all on slurm_acct_db.* TO 'slurm'@'localhost';"])
+        "grant all on slurm_acct_db.* TO slurm"])
     # This last one is allowed to fail
-    subprocess.call(['mysql', '-u', 'root', '-e',
-        "grant all on slurm_acct_db.* TO 'slurm'@'{0}';".format(CONTROL_MACHINE)])
+    # subprocess.call(['mysql', '-u', 'root', '-e',
+    #     "grant all on slurm_acct_db.* TO 'slurm'@'{0}';".format(controller_name)])
 
     subprocess.check_call(shlex.split('systemctl start slurmdbd'))
+
+    time.sleep(10)
 
     subprocess.check_call('/apps/slurm/current/bin/sacctmgr -i add cluster {}'.format(cluster_name), shell=True)
     subprocess.check_call('/apps/slurm/current/bin/sacctmgr -i add account slurm', shell=True)
@@ -179,9 +187,23 @@ def main():
 
     subprocess.check_call('systemctl start slurmctld', shell=True)
 
-    subprocess.check_call('systemctl start nfs-server', shell=True)
+    print("Configuring NFS mounts")
 
     with open('/etc/exports', 'w') as w:
         w.write('/home  *(rw,no_subtree_check,no_root_squash)\n')
         w.write('/etc/munge *(rw,no_subtree_check,no_root_squash)\n')
-        w.write('{} *(rw,no_subtree_check,no_root_squash)')
+        w.write('/apps *(rw,no_subtree_check,no_root_squash)\n')
+        sec_disk = read_meta_key('instance/attributes/canine_conf_sec')
+        if len(sec_disk) and sec_disk != '-':
+            w.write('{} *(rw,no_subtree_check,no_root_squash)\n'.format(
+                sec_disk.strip()
+            ))
+
+    subprocess.check_call('systemctl start nfs-server', shell=True)
+
+    print("Cluster startup complete")
+
+
+# Add user to docker group on workers
+if __name__ == '__main__':
+    main()

@@ -37,19 +37,49 @@ def main(nodes):
     #####################################
 
     hosts = []
-    gpu_hosts = []
+    gpu_hosts = {} # For mapping manifest names to hostnames
     for host in subprocess.check_output('scontrol show hostnames {}'.format(' '.join(nodes)),shell=True).decode().rstrip().split('\n'):
         if gpu_count > 0 and gpu_pattern.match(host):
-            gpu_hosts.append((host, host.replace('-xgpu-worker', '-worker')))
+            gpu_hosts[host.replace('-xgpu-worker', '-worker')] = host
         else:
             hosts.append(host)
 
-    for machine_type, host_list in instance_manifest.loc[hosts].groupby('machine_type'):
-        subprocess.check_call(
-            'gcloud compute instances create {hosts} --image {image}'
-            ' --machine-type {machine_type} --zone {zone}'
-        )
+    if len(hosts):
+        for machine_type, host_list in instance_manifest.loc[hosts].groupby('machine_type'):
+            subprocess.check_call(
+                'gcloud compute instances create {hosts} --labels canine=tgcp-controller--image {image} --boot-disk-size 30 --boot-disk-type pd-standard'
+                ' --machine-type {machine_type} --zone {zone} {script}'.format(
+                    hosts=' '.join(host_list),
+                    image='PLACEHOLDER-WORKER-IMAGE,
+                    machine_type=machine_type,
+                    zone=conf['compute_zone'],
+                    script='--metadata-from-file=startup-script={}'.format() if len(script) else ''
+                ),
+                shell=True
+            )
+            with open('/apps/slurm/scripts/suspend-resume.log', 'a') as w:
+                for hostname in host_list:
+                    w.write("Resume {} ({})\n".format(hostname, machine_type))
 
+
+    if len(gpu_hosts):
+        for machine_type, host_list in instance_manifest.loc[list(gpu_hosts.keys())].groupby('machine_type'):
+            subprocess.check_call(
+                'gcloud compute instances create {hosts} --labels canine=tgcp-controller--image {image} --boot-disk-size 30 --boot-disk-type pd-standard'
+                ' --machine-type {machine_type} --zone {zone} --accelerator=type={gpu_type},count={gpu_count} {script}'.format(
+                    hosts=' '.join(gpu_hosts[host] for host in host_list),
+                    image='PLACEHOLDER-WORKER-IMAGE,
+                    machine_type=machine_type,
+                    zone=conf['compute_zone'],
+                    gpu_type=conf['gpu_type'],
+                    gpu_count=conf['gpu_count'],
+                    script='--metadata-from-file=startup-script={}'.format() if len(script) else ''
+                ),
+                shell=True
+            )
+            with open('/apps/slurm/scripts/suspend-resume.log', 'a') as w:
+                for hostname in host_list:
+                    w.write("Resume {} ({})\n".format(hostname, machine_type))
 
 
 

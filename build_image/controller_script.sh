@@ -42,12 +42,27 @@ SSSSSSSSSSSS    SSS    SSSSSSSSSSSSS    SSSS        SSSS     SSSS     SSSS
 "
   groupadd -g 992 slurm
   useradd -m -c "SLURM Workload Manager" -d /var/lib/slurm -u 992 -g slurm -s /bin/bash slurm
+
+  mkdir -p /apps/modulefiles
+  echo /apps/modulefiles >> /usr/share/modules/init/.modulespath
+
+  mkdir -p /apps/slurm/src
+  mkdir -p /apps/slurm/state
+  chown -R slurm: /apps/slurm/state
+  mkdir -p /apps/slurm/log
+  chown -R slurm: /apps/slurm/log
+  mkdir -p /apps/slurm/scripts/conf_templates
+  chown slurm: /apps/slurm/scripts
+  chmod -R 777 /apps/slurm/scripts
+  chmod -R a+rX /apps/slurm
+
+
   sudo apt-get install -y python dnsutils gcc git hwloc environment-modules \
     libhwloc-dev libibmad-dev libibumad-dev lua5.3 lua5.3-dev man2html \
-    mariadb-server libmysqlclient-dev libmariadb-client-lgpl-dev munge \
+    mariadb-server libsqlclient-dev libmariadb-dev munge \
     libmunge-dev libncurses-dev nfs-kernel-server numactl libnuma-dev libssl-dev \
     libpam-dev libextutils-makemaker-cpanfile-perl python python3-pip libreadline-dev \
-    librrd-dev vim wget tcl tmux pdsh openmpi-bin
+    librrd-dev vim wget tcl tmux pdsh openmpi-bin wget htop
 
   cat > /lib/systemd/system/munge.service <<< "
 [Unit]
@@ -111,29 +126,28 @@ EOF
   cat > /etc/profile.d/slurm.sh <<\EOF
 S_PATH=/apps/slurm/current
 PATH=$PATH:$S_PATH/bin:$S_PATH/sbin
-# CUDA_PATH=/usr/local/cuda
-# PATH=$CUDA_PATH/bin${PATH:+:${PATH}}
-# LD_LIBRARY_PATH=$CUDA_PATH/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+CUDA_PATH=/usr/local/cuda
+PATH=$CUDA_PATH/bin${PATH:+:${PATH}}
+LD_LIBRARY_PATH=$CUDA_PATH/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
 EOF
 
-  mkdir -p /apps/modulefiles
-  echo /apps/modulefiles >> /usr/share/modules/init/.modulespath
-
   systemctl start munge
-  mkdir -p /apps/slurm/src
   cd /apps/slurm/src
   wget https://download.schedmd.com/slurm/slurm-18.08-latest.tar.bz2
   tar -xvjf slurm-18.08-latest.tar.bz2
   cd slurm-18.08.9/
   ./configure --prefix=$(pwd) --sysconfdir=/apps/slurm/current/etc --with-mysql_config=/usr/bin
   make -j install
-  ln -s $(pwd) /apps/slurm/current
   mkdir -p /apps/slurm/current/etc
   chown -R slurm: /apps/slurm/current/etc
-  mkdir -p /apps/slurm/state
+  ln -s $(pwd) /apps/slurm/current
+  chown -R slurm: /apps/slurm/current/etc
+  sudo chmod 777 /apps/slurm/current/etc/
   chown -R slurm: /apps/slurm/state
-  mkdir -p /apps/slurm/log
   chown -R slurm: /apps/slurm/log
+  chown slurm: /apps/slurm/scripts
+  chmod -R a+rX /apps/slurm
+
 
   cat > /lib/systemd/system/slurmctld.service <<\EOF
 [Unit]
@@ -182,5 +196,20 @@ EOF
 
   mkdir -p /var/run/slurm
   chown slurm: /var/run/slurm
+
+  cat > /apps/slurm/current/etc/cgroup.conf <<\EOF
+CgroupAutomount=no
+#CgroupMountpoint=/sys/fs/cgroup
+ConstrainCores=yes
+ConstrainRamSpace=yes
+ConstrainSwapSpace=yes
+TaskAffinity=no
+ConstrainDevices=yes
+EOF
+
+  umask 022
+  python3 -m pip install requests pandas google-auth google-api-python-client
+
+  touch /apps/slurm/install.complete
 
 ) > /stdout.log 2> /stderr.log
