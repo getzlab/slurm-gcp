@@ -17,17 +17,20 @@ def run_script(instance, path):
         shell=True
     )
 
-def main(name, mtype, zone, proj, image_name, image_family):
-    print(crayons.green("Starting controller template...", bold=True))
+def main(name, mtype, zone, proj, image_name, image_family, gpu):
+    print(crayons.green("Starting worker template...", bold=True))
     subprocess.check_call(
         'gcloud compute instances create {} --zone {} --project {} --machine-type {}'
         ' --image-project=ubuntu-os-cloud --image-family ubuntu-1804-lts'
+        ' --boot-disk-size=20GB'
+        ' --accelerator type=nvidia-tesla-{},count=1 --maintenance-policy=TERMINATE '
         ' --metadata-from-file startup-script={}'.format(
             name,
             zone,
             proj,
             mtype,
-            os.path.join(os.path.dirname(__file__), 'controller_script.sh')
+            gpu,
+            os.path.join(os.path.dirname(__file__), 'worker_script.sh')
         ),
         shell=True
     )
@@ -59,23 +62,10 @@ def main(name, mtype, zone, proj, image_name, image_family):
             shell=True
         )
         killprocs.append(stdout)
-        time.sleep(15)
-        while True:
-            proc = subprocess.run(
-                'gcloud compute ssh --zone {} --project {} {} -- [[ -d /apps ]]'.format(zone, proj, name),
-                shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-            if proc.returncode == 0:
-                break
-            time.sleep(10)
+        time.sleep(30)
         print(crayons.green("Copying required scripts...", bold=True))
         files = {
-            'slurm.conf': '/apps/slurm/scripts/conf-templates',
-            'slurmdbd.conf': '/apps/slurm/scripts/conf-templates',
-            'controller_start.py': '/apps/slurm/scripts',
-            'resume_instance.py': '/apps/slurm/scripts',
-            'suspend_instance.py': '/apps/slurm/scripts',
-            'worker_start.py': '/apps/slurm/scripts'
+            'personalize_worker.sh': '/opt/canine/'
         }
         for filename, dest in files.items():
             print(crayons.green("Copying", bold=True), filename, "->", dest)
@@ -104,7 +94,7 @@ def main(name, mtype, zone, proj, image_name, image_family):
         print(crayons.green("Waiting for installation to finish..", bold=True))
         while True:
             proc = subprocess.run(
-                'gcloud compute ssh --zone {} --project {} {} -- [[ -e /apps/slurm/install.complete ]]'.format(zone, proj, name),
+                'gcloud compute ssh --zone {} --project {} {} -- [[ -e /opt/install.complete ]]'.format(zone, proj, name),
                 shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
             )
             if proc.returncode == 0:
@@ -170,7 +160,7 @@ def main(name, mtype, zone, proj, image_name, image_family):
         print(crayons.green("Generating image", bold=True))
         subprocess.check_call(
             'gcloud compute images create {} --source-disk {} --family {}'
-            ' --description "Canine Transient GCP backend controller boot image" --source-disk-zone {}'.format(
+            ' --description "Canine Transient GCP backend worker base image" --source-disk-zone {}'.format(
                 image_name,
                 name,
                 image_family,
@@ -197,7 +187,7 @@ def main(name, mtype, zone, proj, image_name, image_family):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('update-controller-image')
+    parser = argparse.ArgumentParser('update-worker-image')
     parser.add_argument(
         'instance_name',
         help='templace instance name'
@@ -220,9 +210,28 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '-f', '--image-family',
-        help='Template image family. Default:canine-tgcp-controller',
-        default='canine-tgcp-controller'
+        help='Template image family. Default:canine-tgcp-worker',
+        default='canine-tgcp-worker'
+    )
+    parser.add_argument(
+        '-g', '--gpu',
+        help="GPU Type. Not all GPUs are available in every region. Default: k80",
+        default='k80',
+        choices=[
+            'k80',
+            'p4',
+            't4',
+            'v100',
+            'p100'
+        ]
+
     )
 
     args = parser.parse_args()
-    main(args.instance_name, args.instance_type, args.instance_zone, args.project, args.image_name, args.image_family)
+    main(args.instance_name, args.instance_type, args.instance_zone, args.project, args.image_name, args.image_family, args.gpu)
+
+    # worker image:
+    # 1) build global base image (this script)
+    # 2) Users run personalize_image.py first time (saves user profile configuration and docker setup)
+    # -----
+    # 3) Every worker boot: Run brief setup script to mount shares and start slurmd

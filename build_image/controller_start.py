@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """
 Prepares all nodes and startup scripts
 """
@@ -37,7 +38,10 @@ def build_node_defs(cluster_name):
                 'gpu_type': gpu_type,
                 'gpu_count': gpu_count,
                 'compute_zone': zone,
-                'startup_script': read_meta_key('instance/attributes/canine_conf_worker_start')
+                'project': read_meta_key('project/project_id'),
+                'sec': read_meta_key('instance/attributes/canine_conf_sec'),
+                'cluster': read_meta_key('instance/attributes/canine_conf_cluster_name'),
+                'controller': read_meta_key('instance/name')
             },
             w
         )
@@ -114,24 +118,9 @@ class Config(dict):
         with open(path, 'w') as w:
             w.write(self.dump())
 
-class Script(object):
-    def __init__(self):
-        self.lines = [
-            '#!/bin/bash',
-            'set -eo pipefail'
-        ]
-
-    def download_meta_file(self, key, path):
-        self.lines += [
-            'mkdir -p {}'.format(os.path.dirname(path)),
-            'wget -O {path} --header="Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/{key}'.format(
-                key=key,
-                path=path
-            )
-        ]
-        return self
-
 def main():
+    with open('/apps/slurm/scripts/custom_worker_start.sh', 'w') as w:
+        w.write(read_meta_key('instance/attributes/canine_conf_worker_start'))
     # Todo: Fix conf load paths
     # Fix startp script and mount point dirs
     # Determine startup script propagation

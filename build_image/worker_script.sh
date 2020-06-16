@@ -43,26 +43,38 @@ SSSSSSSSSSSS    SSS    SSSSSSSSSSSSS    SSSS        SSSS     SSSS     SSSS
   groupadd -g 992 slurm
   useradd -m -c "SLURM Workload Manager" -d /var/lib/slurm -u 992 -g slurm -s /bin/bash slurm
 
-  mkdir -p /apps/modulefiles
-  echo /apps/modulefiles >> /usr/share/modules/init/.modulespath
-
-  mkdir -p /apps/slurm/src
-  mkdir -p /apps/slurm/state
-  chown -R slurm: /apps/slurm/state
-  mkdir -p /apps/slurm/log
-  chown -R slurm: /apps/slurm/log
-  mkdir -p /apps/slurm/scripts/conf_templates
-  chown slurm: /apps/slurm/scripts
-  chmod -R 777 /apps/slurm/scripts
-  chmod -R a+rX /apps/slurm
-
+  mkdir -p /apps
+  chown -R slurm: /apps
+  chmod -R a+rX /apps
+  mkdir -p /opt/canine
+  chown -R slurm: /opt/canine
+  chmod -R 777 /opt/canine
 
   sudo apt-get install -y python dnsutils gcc git hwloc environment-modules \
     libhwloc-dev libibmad-dev libibumad-dev lua5.3 lua5.3-dev man2html \
     mariadb-server libsqlclient-dev libmariadb-dev munge \
     libmunge-dev libncurses-dev nfs-kernel-server numactl libnuma-dev libssl-dev \
     libpam-dev libextutils-makemaker-cpanfile-perl python python3-pip libreadline-dev \
-    librrd-dev vim wget tcl tmux pdsh openmpi-bin wget htop
+    librrd-dev vim wget tcl tmux pdsh openmpi-bin wget htop docker.io
+
+  mkdir /opt/cuda
+  cd /opt/cuda
+  wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-repo-ubuntu1804_10.0.130-1_amd64.deb
+  dpkg -i cuda-repo-ubuntu1804_10.0.130-1_amd64.deb
+  apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub
+  apt-get update
+  wget https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb
+  apt-get install -y ./nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb
+  apt-get update
+  apt-get install -y --no-install-recommends nvidia-driver-410
+  apt-get install -y --no-install-recommends cuda-10-0 libcudnn7=7.4.1.5-1+cuda10.0 libcudnn7-dev=7.4.1.5-1+cuda10.0
+  apt-get update
+  apt-get install -y --allow-unauthenticated nvinfer-runtime-trt-repo-ubuntu1804-5.0.2-ga-cuda10.0
+  apt-get update
+  apt-get install -y --no-install-recommends libnvinfer-dev
+  rm cuda-repo-ubuntu1804_10.0.130-1_amd64.deb
+  rm nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb
+  nvidia-smi
 
   cat > /lib/systemd/system/munge.service <<< "
 [Unit]
@@ -131,81 +143,15 @@ PATH=$CUDA_PATH/bin${PATH:+:${PATH}}
 LD_LIBRARY_PATH=$CUDA_PATH/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
 EOF
 
-  systemctl start munge
-  cd /apps/slurm/src
-  wget https://download.schedmd.com/slurm/slurm-18.08-latest.tar.bz2
-  tar -xvjf slurm-18.08-latest.tar.bz2
-  cd slurm-18.08.9/
-  ./configure --prefix=$(pwd) --sysconfdir=/apps/slurm/current/etc --with-mysql_config=/usr/bin
-  make -j install
-  mkdir -p /apps/slurm/current/etc
-  chown -R slurm: /apps/slurm/current/etc
-  ln -s $(pwd) /apps/slurm/current
-  chown -R slurm: /apps/slurm/current/etc
-  sudo chmod 777 /apps/slurm/current/etc/
-  chown -R slurm: /apps/slurm/state
-  chown -R slurm: /apps/slurm/log
-  chown slurm: /apps/slurm/scripts
-  chmod -R a+rX /apps/slurm
 
-
-  cat > /lib/systemd/system/slurmctld.service <<\EOF
-[Unit]
-Description=Slurm controller daemon
-After=network.target munge.service
-ConditionPathExists=/apps/slurm/current/etc/slurm.conf
-
-[Service]
-Type=forking
-EnvironmentFile=-/etc/sysconfig/slurmctld
-ExecStart=/apps/slurm/current/sbin/slurmctld $SLURMCTLD_OPTIONS
-ExecReload=/bin/kill -HUP $MAINPID
-PIDFile=/var/run/slurm/slurmctld.pid
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  cat > /lib/systemd/system/slurmdbd.service <<\EOF
-[Unit]
-Description=Slurm DBD accounting daemon
-After=network.target munge.service
-ConditionPathExists=/apps/slurm/current/etc/slurmdbd.conf
-
-[Service]
-Type=forking
-EnvironmentFile=-/etc/sysconfig/slurmdbd
-ExecStart=/apps/slurm/current/sbin/slurmdbd $SLURMDBD_OPTIONS
-ExecReload=/bin/kill -HUP $MAINPID
-PIDFile=/var/run/slurm/slurmdbd.pid
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  systemctl enable mariadb
-  systemctl enable slurmdbd
-  systemctl enable slurmctld
   systemctl enable nfs-server
 
   echo "RPCNFSDCOUNT=256" | tee -a /etc/default/nfs-kernel-server
 
-  cat > /etc/tmpfiles.d/slurm.conf <<\EOF
-d /var/run/slurm  0755 slurm slurm -
-EOF
+  echo '*/2 * * * * if [ `systemctl status slurmd | grep -c inactive` -gt 0 ]; then mount -a; systemctl restart slurmd; fi' | crontab -u root -
 
   mkdir -p /var/run/slurm
   chown slurm: /var/run/slurm
-
-  cat > /apps/slurm/current/etc/cgroup.conf <<\EOF
-CgroupAutomount=no
-#CgroupMountpoint=/sys/fs/cgroup
-ConstrainCores=yes
-ConstrainRamSpace=yes
-ConstrainSwapSpace=yes
-TaskAffinity=no
-ConstrainDevices=yes
-EOF
 
   umask 022
   python3 -m pip install requests pandas google-auth google-api-python-client
@@ -214,6 +160,7 @@ EOF
   apt install -y  gce-compute-image-packages google-compute-engine-oslogin python3-google-compute-engine
   apt autoremove -y
 
-  touch /apps/slurm/install.complete
+  touch /opt/install.complete
+
 
 ) > /stdout.log 2> /stderr.log

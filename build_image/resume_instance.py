@@ -10,16 +10,8 @@ import pandas as pd
 gpu_pattern = re.compile(r'.*-xgpu-worker\d+')
 
 def main(nodes):
-    if os.path.exists('/apps/slurm/current/etc/instance_conf.json'):
-        with open('/apps/slurm/current/etc/instance_conf.json') as r:
-            conf = json.load(r)
-    else:
-        conf = {
-            'gpu_type': '0',
-            'gpu_count': 0,
-            'compute_zone': 'us-central1-a',
-            'startup_script': ''
-        }
+    with open('/apps/slurm/current/etc/instance_conf.json') as r:
+        conf = json.load(r)
 
     instance_manifest = pd.read_csv('/apps/slurm/current/etc/instance_manifest.tsv', sep='\t', index_col=0)
 
@@ -47,13 +39,14 @@ def main(nodes):
     if len(hosts):
         for machine_type, host_list in instance_manifest.loc[hosts].groupby('machine_type'):
             subprocess.check_call(
-                'gcloud compute instances create {hosts} --labels canine=tgcp-controller--image {image} --boot-disk-size 30 --boot-disk-type pd-standard'
-                ' --machine-type {machine_type} --zone {zone} {script}'.format(
+                'gcloud compute instances create {hosts} --labels canine=tgcp-worker --boot-disk-size 30 --boot-disk-type pd-standard'
+                ' --image-project {project} --image-family canine-tgcp-worker-personalized '
+                ' --metadata-from-file=startup-script=/apps/slurm/scripts/worker_start.py '
+                ' --machine-type {machine_type} --zone {zone}'.format(
                     hosts=' '.join(host_list),
-                    image='PLACEHOLDER-WORKER-IMAGE,
+                    project=conf['project'],
                     machine_type=machine_type,
                     zone=conf['compute_zone'],
-                    script='--metadata-from-file=startup-script={}'.format() if len(script) else ''
                 ),
                 shell=True
             )
@@ -65,15 +58,20 @@ def main(nodes):
     if len(gpu_hosts):
         for machine_type, host_list in instance_manifest.loc[list(gpu_hosts.keys())].groupby('machine_type'):
             subprocess.check_call(
-                'gcloud compute instances create {hosts} --labels canine=tgcp-controller--image {image} --boot-disk-size 30 --boot-disk-type pd-standard'
-                ' --machine-type {machine_type} --zone {zone} --accelerator=type={gpu_type},count={gpu_count} {script}'.format(
+                'gcloud compute instances create {hosts} --labels canine=tgcp-worker --boot-disk-size 30 --boot-disk-type pd-standard'
+                ' --image-project {project} --image-family canine-tgcp-worker-personalized '
+                ' --metadata-from-file=startup-script=/apps/slurm/scripts/worker_start.py '
+                ' --metadata=canine_conf_cluster_name={cluster},canine_conf_controller={controller},canine_conf_sec={sec}'
+                ' --machine-type {machine_type} --zone {zone} --accelerator=type={gpu_type},count={gpu_count}'.format(
                     hosts=' '.join(gpu_hosts[host] for host in host_list),
-                    image='PLACEHOLDER-WORKER-IMAGE,
+                    project=conf['project'],
                     machine_type=machine_type,
                     zone=conf['compute_zone'],
                     gpu_type=conf['gpu_type'],
                     gpu_count=conf['gpu_count'],
-                    script='--metadata-from-file=startup-script={}'.format() if len(script) else ''
+                    cluster=conf['cluster'],
+                    controller=conf['controller'],
+                    sec=conf['sec']
                 ),
                 shell=True
             )
