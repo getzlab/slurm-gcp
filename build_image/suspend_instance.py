@@ -43,7 +43,9 @@ def main(nodes):
                     hosts=' '.join(host_list),
                     zone=conf['compute_zone'],
                 ),
-                shell=True
+                shell=True,
+                stdin=subprocess.DEVNULL,
+                executable='/bin/bash'
             )
             with open('/apps/slurm/scripts/suspend-resume.log', 'a') as w:
                 for hostname in host_list:

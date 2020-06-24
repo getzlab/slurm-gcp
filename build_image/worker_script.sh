@@ -2,6 +2,7 @@
 
 (
   sudo apt-get update
+  touch /poop
   cat > /etc/motd <<< "
                                  SSSSSSS
                                 SSSSSSSSS
@@ -76,6 +77,28 @@ SSSSSSSSSSSS    SSS    SSSSSSSSSSSSS    SSSS        SSSS     SSSS     SSSS
   rm nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb
   nvidia-smi
 
+
+  cat > /lib/systemd/system/slurmd.service <<< "
+[Unit]
+Description=Slurm node daemon
+After=network.target munge.service
+ConditionPathExists={prefix}/etc/slurm.conf
+
+[Service]
+Type=forking
+EnvironmentFile=-/etc/sysconfig/slurmd
+ExecStart=/apps/slurm/current/sbin/slurmd \$SLURMD_OPTIONS
+ExecReload=/bin/kill -HUP \$MAINPID
+PIDFile=/var/run/slurm/slurmd.pid
+KillMode=process
+LimitNOFILE=51200
+LimitMEMLOCK=infinity
+LimitSTACK=infinity
+
+[Install]
+WantedBy=multi-user.target
+"
+
   cat > /lib/systemd/system/munge.service <<< "
 [Unit]
 Description=MUNGE authentication service
@@ -83,6 +106,7 @@ Documentation=man:munged(8)
 After=network.target
 After=syslog.target
 After=time-sync.target
+RequiresMountsFor=/etc/munge
 
 [Service]
 Type=forking
@@ -95,10 +119,6 @@ Restart=on-abort
 [Install]
 WantedBy=multi-user.target
 "
-
-  systemctl enable munge
-  create-munge-key -f
-
   cat > /etc/profile <<\EOF
   # /etc/profile: system-wide .profile file for the Bourne shell (sh(1))
   # and Bourne compatible shells (bash(1), ksh(1), ash(1), ...).
@@ -149,12 +169,26 @@ EOF
   echo "RPCNFSDCOUNT=256" | tee -a /etc/default/nfs-kernel-server
 
   echo '*/2 * * * * if [ `systemctl status slurmd | grep -c inactive` -gt 0 ]; then mount -a; systemctl restart slurmd; fi' | crontab -u root -
+  sed -e 's/GRUB_CMDLINE_LINUX="\\?\\([^"]*\\)"\\?/GRUB_CMDLINE_LINUX="\\1 cgroup_enable=memory swapaccount=1"/' < /etc/default/grub > grub.tmp
+  sudo mv grub.tmp /etc/default/grub
+  sudo grub-mkconfig -o /etc/grub2.cfg
 
   mkdir -p /var/run/slurm
   chown slurm: /var/run/slurm
 
+  dd if=/dev/zero of=/swapfile count=4096 bs=1MiB
+  chmod 700 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile swap swap defaults 0 0' | tee -a /etc/fstab
+
   umask 022
-  python3 -m pip install requests pandas google-auth google-api-python-client
+  curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+  python2 get-pip.py
+  rm get-pip.py
+  python2 -m pip uninstall -y crcmod
+  python2 -m pip install --no-cache-dir -U crcmod
+  python3 -m pip install requests pandas google-auth google-api-python-client crcmod
 
   apt-get update
   apt install -y  gce-compute-image-packages google-compute-engine-oslogin python3-google-compute-engine

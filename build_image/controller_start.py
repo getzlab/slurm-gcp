@@ -38,10 +38,12 @@ def build_node_defs(cluster_name):
                 'gpu_type': gpu_type,
                 'gpu_count': gpu_count,
                 'compute_zone': zone,
-                'project': read_meta_key('project/project_id'),
+                'project': read_meta_key('project/project-id'),
                 'sec': read_meta_key('instance/attributes/canine_conf_sec'),
                 'cluster': read_meta_key('instance/attributes/canine_conf_cluster_name'),
-                'controller': read_meta_key('instance/name')
+                'controller': read_meta_key('instance/name'),
+                'ip': read_meta_key('instance/attributes/canine_conf_ip') == '+',
+                'preemptible': read_meta_key('instance/attributes/canine_conf_preempt') == '+'
             },
             w
         )
@@ -121,6 +123,12 @@ class Config(dict):
 def main():
     with open('/apps/slurm/scripts/custom_worker_start.sh', 'w') as w:
         w.write(read_meta_key('instance/attributes/canine_conf_worker_start'))
+    with open('/apps/slurm/scripts/custom_controller_start.sh', 'w') as w:
+        w.write(read_meta_key('instance/attributes/canine_conf_controller_start'))
+    subprocess.check_call('bash /apps/slurm/scripts/custom_controller_start.sh', shell=True)
+    subprocess.check_call("chown slurm: /apps/slurm/scripts/*", shell=True, executable='/bin/bash')
+    subprocess.check_call("chmod 755 /apps/slurm/scripts/*", shell=True, executable='/bin/bash')
+    subprocess.check_call("chmod 666 /apps/slurm/scripts/wrapper.log /apps/slurm/scripts/suspend-resume.log", shell=True, executable='/bin/bash')
     # Todo: Fix conf load paths
     # Fix startp script and mount point dirs
     # Determine startup script propagation
@@ -171,7 +179,7 @@ def main():
     subprocess.check_call('/apps/slurm/current/bin/sacctmgr -i add cluster {}'.format(cluster_name), shell=True)
     subprocess.check_call('/apps/slurm/current/bin/sacctmgr -i add account slurm', shell=True)
     subprocess.check_call('/apps/slurm/current/bin/sacctmgr -i add user {} account=slurm'.format(
-        read_meta_key('instance/attributes/user').replace('@', '_').replace('.', '_')
+        read_meta_key('instance/attributes/canine_conf_user').replace('@', '_').replace('.', '_')
     ), shell=True)
 
     subprocess.check_call('systemctl start slurmctld', shell=True)
@@ -179,16 +187,19 @@ def main():
     print("Configuring NFS mounts")
 
     with open('/etc/exports', 'w') as w:
-        w.write('/home  *(rw,no_subtree_check,no_root_squash)\n')
-        w.write('/etc/munge *(rw,no_subtree_check,no_root_squash)\n')
-        w.write('/apps *(rw,no_subtree_check,no_root_squash)\n')
+        w.write('/home  {}-*(rw,no_subtree_check,no_root_squash)\n'.format(cluster_name))
+        w.write('/etc/munge {}-*(rw,no_subtree_check,no_root_squash)\n'.format(cluster_name))
+        w.write('/apps {}-*(rw,no_subtree_check,no_root_squash)\n'.format(cluster_name))
         sec_disk = read_meta_key('instance/attributes/canine_conf_sec')
         if len(sec_disk) and sec_disk != '-':
-            w.write('{} *(rw,no_subtree_check,no_root_squash)\n'.format(
-                sec_disk.strip()
+            w.write('{} {}-*(rw,no_subtree_check,no_root_squash)\n'.format(
+                sec_disk.strip(),
+                cluster_name
             ))
 
     subprocess.check_call('systemctl start nfs-server', shell=True)
+    time.sleep(10)
+    subprocess.check_call('systemctl restart nfs-server', shell=True)
 
     print("Cluster startup complete")
 

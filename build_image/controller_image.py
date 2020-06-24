@@ -75,7 +75,9 @@ def main(name, mtype, zone, proj, image_name, image_family):
             'controller_start.py': '/apps/slurm/scripts',
             'resume_instance.py': '/apps/slurm/scripts',
             'suspend_instance.py': '/apps/slurm/scripts',
-            'worker_start.py': '/apps/slurm/scripts'
+            'worker_start.py': '/apps/slurm/scripts',
+            'resume_wrapper.sh': '/apps/slurm/scripts',
+            'suspend_wrapper.sh': '/apps/slurm/scripts',
         }
         for filename, dest in files.items():
             print(crayons.green("Copying", bold=True), filename, "->", dest)
@@ -226,3 +228,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     main(args.instance_name, args.instance_type, args.instance_zone, args.project, args.image_name, args.image_family)
+
+####
+#1) Need to wrap suspend and resume
+#2) Fix slurmd.service

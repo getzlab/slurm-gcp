@@ -48,10 +48,10 @@ SSSSSSSSSSSS    SSS    SSSSSSSSSSSSS    SSSS        SSSS     SSSS     SSSS
 
   mkdir -p /apps/slurm/src
   mkdir -p /apps/slurm/state
+  mkdir -p /apps/slurm/scripts
   chown -R slurm: /apps/slurm/state
   mkdir -p /apps/slurm/log
   chown -R slurm: /apps/slurm/log
-  mkdir -p /apps/slurm/scripts/conf_templates
   chown slurm: /apps/slurm/scripts
   chmod -R 777 /apps/slurm/scripts
   chmod -R a+rX /apps/slurm
@@ -59,7 +59,7 @@ SSSSSSSSSSSS    SSS    SSSSSSSSSSSSS    SSSS        SSSS     SSSS     SSSS
 
   sudo apt-get install -y python dnsutils gcc git hwloc environment-modules \
     libhwloc-dev libibmad-dev libibumad-dev lua5.3 lua5.3-dev man2html \
-    mariadb-server libsqlclient-dev libmariadb-dev munge \
+    mariadb-server libsqlclient-dev libmariadbclient-dev libmariadb-dev munge \
     libmunge-dev libncurses-dev nfs-kernel-server numactl libnuma-dev libssl-dev \
     libpam-dev libextutils-makemaker-cpanfile-perl python python3-pip libreadline-dev \
     librrd-dev vim wget tcl tmux pdsh openmpi-bin wget htop
@@ -138,15 +138,16 @@ EOF
   cd slurm-18.08.9/
   ./configure --prefix=$(pwd) --sysconfdir=/apps/slurm/current/etc --with-mysql_config=/usr/bin
   make -j install
-  mkdir -p /apps/slurm/current/etc
-  chown -R slurm: /apps/slurm/current/etc
   ln -s $(pwd) /apps/slurm/current
+  mkdir -p /apps/slurm/current/etc
   chown -R slurm: /apps/slurm/current/etc
   sudo chmod 777 /apps/slurm/current/etc/
   chown -R slurm: /apps/slurm/state
   chown -R slurm: /apps/slurm/log
   chown slurm: /apps/slurm/scripts
   chmod -R a+rX /apps/slurm
+  touch /apps/slurm/scripts/suspend-resume.log
+  chmod 666 /apps/slurm/scripts/suspend-resume.log
 
 
   cat > /lib/systemd/system/slurmctld.service <<\EOF
@@ -208,11 +209,20 @@ ConstrainDevices=yes
 EOF
 
   umask 022
+  curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+  python2 get-pip.py
+  rm get-pip.py
+  python2 -m pip uninstall -y crcmod
+  python2 -m pip install --no-cache-dir -U crcmod
+  python3 -m pip install requests pandas google-auth google-api-python-client crcmod
   python3 -m pip install requests pandas google-auth google-api-python-client
 
   apt-get update
   apt install -y  gce-compute-image-packages google-compute-engine-oslogin python3-google-compute-engine
   apt autoremove -y
+
+  touch /apps/slurm/scripts/wrapper.log
+  chmod 666 /apps/slurm/scripts/wrapper.log
 
   touch /apps/slurm/install.complete
 
