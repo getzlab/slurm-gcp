@@ -65,7 +65,8 @@ def main(name, mtype, zone, proj, image_name, image_family, gpu):
         time.sleep(30)
         print(crayons.green("Copying required scripts...", bold=True))
         files = {
-            'personalize_worker.sh': '/opt/canine/'
+            'personalize_worker.sh': '/opt/canine/',
+            'worker_start.py': '/opt/canine/'
         }
         for filename, dest in files.items():
             print(crayons.green("Copying", bold=True), filename, "->", dest)
@@ -127,6 +128,39 @@ def main(name, mtype, zone, proj, image_name, image_family, gpu):
                 executable='/bin/bash',
                 shell=True
             )
+            print(crayons.green("Fixing slurmd.service because it's somehow always broken", bold=True))
+            with open(os.path.join(tempdir, 'slurmd.service'), 'w') as w:
+                w.write("""
+[Unit]
+Description=Slurm node daemon
+After=network.target munge.service
+ConditionPathExists={prefix}/etc/slurm.conf
+
+[Service]
+Type=forking
+EnvironmentFile=-/etc/sysconfig/slurmd
+ExecStart=/apps/slurm/current/sbin/slurmd \$SLURMD_OPTIONS
+ExecReload=/bin/kill -HUP \$MAINPID
+PIDFile=/var/run/slurm/slurmd.pid
+KillMode=process
+LimitNOFILE=51200
+LimitMEMLOCK=infinity
+LimitSTACK=infinity
+
+[Install]
+WantedBy=multi-user.target
+""")
+
+            subprocess.check_call(
+                'scp -i {tempdir}/id_rsa {tempdir}/slurmd.service root@{instance}.{zone}.{project}:/lib/systemd/system/slurmd.service'.format(
+                    zone=zone,
+                    project=proj,
+                    tempdir=tempdir,
+                    instance=name
+                ),
+                shell=True
+            )
+
             print(crayons.green("Logging in as root to clean user directories", bold=True))
             print('ssh -i {tempdir}/id_rsa root@{instance}.{zone}.{project}'
                 ' -- \'bash -c "sudo pkill -u {user}; userdel -rf {user} && rm /root/.ssh/authorized_keys"\''.format(

@@ -21,28 +21,31 @@ def main(nodes):
     # for some reason, the USER environment variable is set to root when this
     # script is run, even though it's run under user slurm ...
     os.environ["USER"] = "slurm"
-
+    os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/apps/slurm/current/bin:/apps/slurm/current/sbin"
     # export gcloud credential path
-    os.environ["CLOUDSDK_CONFIG"] = subprocess.check_output(
-      "echo -n ~slurm/.config/gcloud", shell = True
-    ).decode()
+    # os.environ["CLOUDSDK_CONFIG"] = subprocess.check_output(
+    #   "echo -n ~slurm/.config/gcloud", shell = True
+    # ).decode()
     #####################################
 
     hosts = []
     gpu_hosts = {} # For mapping manifest names to hostnames
-    for host in subprocess.check_output('scontrol show hostnames {}'.format(' '.join(nodes)),shell=True).decode().rstrip().split('\n'):
+    print("Determining hostnames", nodes)
+    for host in subprocess.check_output('scontrol show hostnames {}'.format(' '.join(nodes)), shell=True).decode().rstrip().split('\n'):
         if conf['gpu_count'] > 0 and gpu_pattern.match(host):
             gpu_hosts[host.replace('-xgpu-worker', '-worker')] = host
         else:
             hosts.append(host)
+    print("Hostnames", hosts, gpu_hosts)
 
     if len(hosts):
         for machine_type, host_list in instance_manifest.loc[hosts].groupby('machine_type'):
+            print("Resuming", host_list, machine_type)
             subprocess.check_call(
                 'gcloud compute instances create {hosts} --async --labels canine=tgcp-worker,k9cluster={cluster} --boot-disk-size=50GB --boot-disk-type pd-standard'
                 ' --image-project {project} --image-family canine-tgcp-worker-personalized '
                 ' --scopes=https://www.googleapis.com/auth/cloud-platform '
-                ' --metadata-from-file=startup-script=/apps/slurm/scripts/worker_start.py '
+                ' --metadata-from-file=startup-script=/apps/slurm/scripts/worker_wrapper.sh '
                 ' --metadata=canine_conf_cluster_name={cluster},canine_conf_controller={controller},canine_conf_sec={sec} '
                 ' --machine-type {machine_type} --zone {zone} {ip} {preemptible}'.format(
                     hosts=' '.join(host_list.index),
@@ -66,11 +69,12 @@ def main(nodes):
 
     if len(gpu_hosts):
         for machine_type, host_list in instance_manifest.loc[list(gpu_hosts.keys())].groupby('machine_type'):
+            print("Resuming", host_list, machine_type)
             subprocess.check_call(
                 'gcloud compute instances create {hosts} --async --labels canine=tgcp-worker,k9cluster={cluster} --boot-disk-size=50GB --boot-disk-type pd-standard'
                 ' --image-project {project} --image-family canine-tgcp-worker-personalized '
                 ' --scopes=https://www.googleapis.com/auth/cloud-platform '
-                ' --metadata-from-file=startup-script=/apps/slurm/scripts/worker_start.py '
+                ' --metadata-from-file=startup-script=/apps/slurm/scripts/worker_wrapper.sh '
                 ' --metadata=canine_conf_cluster_name={cluster},canine_conf_controller={controller},canine_conf_sec={sec}'
                 ' --machine-type {machine_type} --zone {zone} --accelerator=type={gpu_type},count={gpu_count} {ip} {preemptible}'.format(
                     hosts=' '.join(gpu_hosts[host] for host in host_list.index),

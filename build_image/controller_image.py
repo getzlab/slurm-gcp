@@ -78,6 +78,7 @@ def main(name, mtype, zone, proj, image_name, image_family):
             'worker_start.py': '/apps/slurm/scripts',
             'resume_wrapper.sh': '/apps/slurm/scripts',
             'suspend_wrapper.sh': '/apps/slurm/scripts',
+            'worker_wrapper.sh': '/apps/slurm/scripts'
         }
         for filename, dest in files.items():
             print(crayons.green("Copying", bold=True), filename, "->", dest)

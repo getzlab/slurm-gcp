@@ -86,6 +86,7 @@ WantedBy=multi-user.target
 
   systemctl enable munge
   create-munge-key -f
+  dd if=/dev/zero bs=1 count=1024 of=/etc/munge/munge.key # Sync Munge key
 
   cat > /etc/profile <<\EOF
   # /etc/profile: system-wide .profile file for the Bourne shell (sh(1))

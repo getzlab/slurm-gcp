@@ -1,2 +1,2 @@
 #!/bin/bash
-python3 /apps/slurm/scripts/resume_instance.py $@ </dev/null 2>&1 >> /apps/slurm/scripts/wrapper.log
+python3 /apps/slurm/scripts/resume_instance.py $@ </dev/null 2>> /apps/slurm/scripts/wrapper.log >> /apps/slurm/scripts/wrapper.log

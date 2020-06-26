@@ -50,6 +50,8 @@ SSSSSSSSSSSS    SSS    SSSSSSSSSSSSS    SSSS        SSSS     SSSS     SSSS
   mkdir -p /opt/canine
   chown -R slurm: /opt/canine
   chmod -R 777 /opt/canine
+  mkdir -p /var/log/slurm/ /var/spool/slurmd
+  chown -R slurm: /var/log/slurm/ /var/spool/slurmd
 
   sudo apt-get install -y python dnsutils gcc git hwloc environment-modules \
     libhwloc-dev libibmad-dev libibumad-dev lua5.3 lua5.3-dev man2html \
@@ -82,7 +84,28 @@ SSSSSSSSSSSS    SSS    SSSSSSSSSSSSS    SSSS        SSSS     SSSS     SSSS
 [Unit]
 Description=Slurm node daemon
 After=network.target munge.service
-ConditionPathExists={prefix}/etc/slurm.conf
+ConditionPathExists=/apps/slurm/current/etc/slurm.conf
+
+[Service]
+Type=forking
+EnvironmentFile=-/etc/sysconfig/slurmd
+ExecStart=/apps/slurm/current/sbin/slurmd \$SLURMD_OPTIONS
+ExecReload=/bin/kill -HUP \$MAINPID
+PIDFile=/var/run/slurm/slurmd.pid
+KillMode=process
+LimitNOFILE=51200
+LimitMEMLOCK=infinity
+LimitSTACK=infinity
+
+[Install]
+WantedBy=multi-user.target
+"
+
+cat > /opt/slurmd_test_service <<< "
+[Unit]
+Description=Slurm node daemon
+After=network.target munge.service
+ConditionPathExists=/apps/slurm/current/etc/slurm.conf
 
 [Service]
 Type=forking
