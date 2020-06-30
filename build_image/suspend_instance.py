@@ -40,7 +40,7 @@ def main(nodes):
         for machine_type, host_list in instance_manifest.loc[hosts].groupby('machine_type'):
             subprocess.check_call(
                 'gcloud compute instances delete {hosts} --zone {zone} --quiet'.format(
-                    hosts=' '.join(host_list),
+                    hosts=' '.join(host_list.index),
                     zone=conf['compute_zone'],
                 ),
                 shell=True,

@@ -217,6 +217,8 @@ EOF
   apt install -y  gce-compute-image-packages google-compute-engine-oslogin python3-google-compute-engine
   apt autoremove -y
 
+  systemctl disable slurmd
+
   touch /opt/install.complete
 
 
