@@ -2,7 +2,6 @@
 
 (
   sudo apt-get update
-  touch /poop
   cat > /etc/motd <<< "
                                  SSSSSSS
                                 SSSSSSSSS
@@ -178,6 +177,8 @@ EOF
 
   cat /etc/bash.bashrc.bak >> /etc/bash.bashrc
 
+  sudo snap remove google-cloud-sdk
+
   cat > /etc/profile.d/slurm.sh <<\EOF
 S_PATH=/apps/slurm/current
 PATH=$PATH:$S_PATH/bin:$S_PATH/sbin
@@ -195,6 +196,11 @@ EOF
   sed -e 's/GRUB_CMDLINE_LINUX="\\?\\([^"]*\\)"\\?/GRUB_CMDLINE_LINUX="\\1 cgroup_enable=memory swapaccount=1"/' < /etc/default/grub > grub.tmp
   sudo mv grub.tmp /etc/default/grub
   sudo grub-mkconfig -o /etc/grub2.cfg
+
+  curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+  curl -s -L https://nvidia.github.io/nvidia-docker/$(. /etc/os-release;echo $ID$VERSION_ID)/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+  apt-get update
+  apt-get install -y nvidia-container-toolkit nvidia-docker2
 
   mkdir -p /var/run/slurm
   chown slurm: /var/run/slurm

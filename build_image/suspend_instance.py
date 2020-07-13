@@ -27,7 +27,7 @@ def main(nodes):
     # for some reason, the USER environment variable is set to root when this
     # script is run, even though it's run under user slurm ...
     os.environ["USER"] = "slurm"
-    os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/apps/slurm/current/bin:/apps/slurm/current/sbin"
+    os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/apps/slurm/current/bin:/apps/slurm/current/sbin:/apps/google-cloud-sdk/bin"
     # export gcloud credential path
     # os.environ["CLOUDSDK_CONFIG"] = subprocess.check_output(
     #   "echo -n ~slurm/.config/gcloud", shell = True

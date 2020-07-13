@@ -124,9 +124,17 @@ EOF
 
   cat /etc/bash.bashrc.bak >> /etc/bash.bashrc
 
+  sudo snap remove google-cloud-sdk
+  cd /apps
+  wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-299.0.0-linux-x86_64.tar.gz
+  tar xzf google-cloud-sdk-299.0.0-linux-x86_64.tar.gz
+  rm google-cloud-sdk-299.0.0-linux-x86_64.tar.gz
+  /apps/google-cloud-sdk/install.sh --quiet --path-update true --rc-path /etc/bash.bashrc
+  cd /
+
   cat > /etc/profile.d/slurm.sh <<\EOF
 S_PATH=/apps/slurm/current
-PATH=$PATH:$S_PATH/bin:$S_PATH/sbin
+PATH=$PATH:$S_PATH/bin:$S_PATH/sbin:/apps/google-cloud-sdk/bin
 CUDA_PATH=/usr/local/cuda
 PATH=$CUDA_PATH/bin${PATH:+:${PATH}}
 LD_LIBRARY_PATH=$CUDA_PATH/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}

@@ -48,7 +48,7 @@ def build_node_defs(cluster_name):
             w
         )
     proc = subprocess.run(
-        'gcloud compute machine-types list --zones {}'.format(zone),
+        '/apps/google-cloud-sdk/bin/gcloud compute machine-types list --zones {}'.format(zone),
         shell=True,
         stdout=subprocess.PIPE
     )
