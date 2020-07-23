@@ -64,7 +64,6 @@ WantedBy=multi-user.target
         w.write('{}:/home\t/home\tnfs\trw,hard,intr\t0\t0\n'.format(controller))
         if len(sec) and sec != '-':
             w.write('{0}:{1}\t{1}\tnfs\trw,hard,intr\t0\t0\n'.format(controller, sec))
-    subprocess.check_call('rm -rf /home/*', shell=True)
     subprocess.check_call("mount -a", shell=True)
     time.sleep(30)
     subprocess.check_call('bash /apps/slurm/scripts/custom_worker_start.sh', shell=True)
