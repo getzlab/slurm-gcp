@@ -22,7 +22,7 @@ def main(name, mtype, zone, proj, image_name, image_family, gpu):
     subprocess.check_call(
         'gcloud compute instances create {} --zone {} --project {} --machine-type {}'
         ' --image-project=ubuntu-os-cloud --image-family ubuntu-2004-lts'
-        ' --boot-disk-size=20GB'
+        ' --boot-disk-size=40GB'
         ' --accelerator type=nvidia-tesla-{},count=1 --maintenance-policy=TERMINATE '
         ' --metadata-from-file startup-script={}'.format(
             name,
