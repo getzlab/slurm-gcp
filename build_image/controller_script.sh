@@ -62,7 +62,7 @@ SSSSSSSSSSSS    SSS    SSSSSSSSSSSSS    SSSS        SSSS     SSSS     SSSS
     mariadb-server libsqlclient-dev libmariadbclient-dev libmariadb-dev munge \
     libmunge-dev libncurses-dev nfs-kernel-server numactl libnuma-dev libssl-dev \
     libpam-dev libextutils-makemaker-cpanfile-perl python python3-pip libreadline-dev \
-    librrd-dev vim wget tcl tmux pdsh openmpi-bin wget htop
+    librrd-dev vim wget tcl tmux pdsh openmpi-bin wget htop ipython3 jupyter
 
   cat > /lib/systemd/system/munge.service <<< "
 [Unit]
