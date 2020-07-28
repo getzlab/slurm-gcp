@@ -21,7 +21,7 @@ def main(name, mtype, zone, proj, image_name, image_family, gpu):
     print(crayons.green("Starting worker template...", bold=True))
     subprocess.check_call(
         'gcloud compute instances create {} --zone {} --project {} --machine-type {}'
-        ' --image-project=ubuntu-os-cloud --image-family ubuntu-1804-lts'
+        ' --image-project=ubuntu-os-cloud --image-family ubuntu-2004-lts'
         ' --boot-disk-size=20GB'
         ' --accelerator type=nvidia-tesla-{},count=1 --maintenance-policy=TERMINATE '
         ' --metadata-from-file startup-script={}'.format(

@@ -21,7 +21,7 @@ def main(name, mtype, zone, proj, image_name, image_family):
     print(crayons.green("Starting controller template...", bold=True))
     subprocess.check_call(
         'gcloud compute instances create {} --zone {} --project {} --machine-type {}'
-        ' --image-project=ubuntu-os-cloud --image-family ubuntu-1804-lts'
+        ' --image-project=ubuntu-os-cloud --image-family ubuntu-2004-lts'
         ' --metadata-from-file startup-script={}'.format(
             name,
             zone,
