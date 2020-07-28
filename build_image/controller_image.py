@@ -164,9 +164,10 @@ def main(name, mtype, zone, proj, image_name, image_family):
         print(crayons.green("Stopping template instance", bold=True))
         time.sleep(10)
         subprocess.check_call(
-            'gcloud compute instances stop {} --zone {}'.format(
+            'gcloud compute instances stop {} --zone {} --project {}'.format(
                 name,
-                zone
+                zone,
+                proj
             ),
             shell=True
         )
@@ -190,9 +191,10 @@ def main(name, mtype, zone, proj, image_name, image_family):
             shell=True
         )
         subprocess.check_call(
-            'yes | gcloud compute instances delete {} --zone {}'.format(
+            'yes | gcloud compute instances delete {} --zone {} --project {}'.format(
                 name,
-                zone
+                zone,
+                proj
             ),
             executable='/bin/bash',
             shell=True
