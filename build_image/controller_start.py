@@ -43,7 +43,8 @@ def build_node_defs(cluster_name):
                 'cluster': read_meta_key('instance/attributes/canine_conf_cluster_name'),
                 'controller': read_meta_key('instance/name'),
                 'ip': read_meta_key('instance/attributes/canine_conf_ip') == '+',
-                'preemptible': read_meta_key('instance/attributes/canine_conf_preempt') == '+'
+                'preemptible': read_meta_key('instance/attributes/canine_conf_preempt') == '+',
+                'family': read_meta_key('instance/attributes/canine_conf_family')
             },
             w
         )

@@ -43,7 +43,7 @@ def main(nodes):
             print("Resuming", host_list, machine_type)
             subprocess.check_call(
                 'gcloud compute instances create {hosts} --async --labels canine=tgcp-worker,k9cluster={cluster} --boot-disk-size=50GB --boot-disk-type pd-standard'
-                ' --image-project {project} --image-family canine-tgcp-worker-personalized '
+                ' --image-project {project} --image-family {family} '
                 ' --scopes=https://www.googleapis.com/auth/cloud-platform '
                 ' --metadata-from-file=startup-script=/apps/slurm/scripts/worker_wrapper.sh '
                 ' --metadata=canine_conf_cluster_name={cluster},canine_conf_controller={controller},canine_conf_sec={sec} '
@@ -51,6 +51,7 @@ def main(nodes):
                     hosts=' '.join(host_list.index),
                     project=conf['project'],
                     cluster=conf['cluster'],
+                    family=conf['family'],
                     controller=conf['controller'],
                     sec=conf['sec'],
                     machine_type=machine_type,
@@ -72,7 +73,7 @@ def main(nodes):
             print("Resuming", host_list, machine_type)
             subprocess.check_call(
                 'gcloud compute instances create {hosts} --async --labels canine=tgcp-worker,k9cluster={cluster} --boot-disk-size=50GB --boot-disk-type pd-standard'
-                ' --image-project {project} --image-family canine-tgcp-worker-personalized '
+                ' --image-project {project} --image-family {family} '
                 ' --scopes=https://www.googleapis.com/auth/cloud-platform '
                 ' --metadata-from-file=startup-script=/apps/slurm/scripts/worker_wrapper.sh '
                 ' --metadata=canine_conf_cluster_name={cluster},canine_conf_controller={controller},canine_conf_sec={sec}'
@@ -84,6 +85,7 @@ def main(nodes):
                     gpu_type=conf['gpu_type'],
                     gpu_count=conf['gpu_count'],
                     cluster=conf['cluster'],
+                    family=conf['family'],
                     controller=conf['controller'],
                     sec=conf['sec'],
                     ip="--no-address" if not conf['ip'] else '',
