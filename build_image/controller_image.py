@@ -153,14 +153,14 @@ def main(name, mtype, zone, proj, image_name, image_family):
             ).strip().decode()
 
             print(crayons.green("Logging in as root to clean user directories", bold=True))
-            print('ssh -o "StrictHostKeyChecking no" -i {tempdir}/id_rsa root@{inst_ip}'
+            print('ssh -o "CheckHostIP no" -o "StrictHostKeyChecking no" -i {tempdir}/id_rsa root@{inst_ip}'
                 ' -- \'bash -c "sudo pkill -u {user}; userdel -rf {user} && rm /root/.ssh/authorized_keys"\''.format(
                     tempdir=tempdir,
                     inst_ip=inst_ip,
                     user=os.environ['USER'].strip()
             ))
             subprocess.check_call(
-                'ssh -o "StrictHostKeyChecking no" -i {tempdir}/id_rsa root@{inst_ip}'
+                'ssh -o "CheckHostIP no" -o "StrictHostKeyChecking no" -i {tempdir}/id_rsa root@{inst_ip}'
                 ' -- \'bash -c "sudo pkill -u {user}; userdel -rf {user} && rm /root/.ssh/authorized_keys"\''.format(
                     tempdir=tempdir,
                     inst_ip=inst_ip,
