@@ -140,22 +140,30 @@ def main(name, mtype, zone, proj, image_name, image_family):
                 executable='/bin/bash',
                 shell=True
             )
+
+            inst_ip = subprocess.check_output(
+              "gcloud compute instances describe {instance} "
+              "--format='get(networkInterfaces[0].accessConfigs.natIP)' "
+              "--zone {zone} --project {project}".format(
+                zone=zone,
+                project=proj,
+                instance=name
+              ),
+              shell = True
+            ).strip().decode()
+
             print(crayons.green("Logging in as root to clean user directories", bold=True))
-            print('ssh -i {tempdir}/id_rsa root@{instance}.{zone}.{project}'
+            print('ssh -o "StrictHostKeyChecking no" -i {tempdir}/id_rsa root@{inst_ip}'
                 ' -- \'bash -c "sudo pkill -u {user}; userdel -rf {user} && rm /root/.ssh/authorized_keys"\''.format(
-                    zone=zone,
-                    project=proj,
                     tempdir=tempdir,
-                    instance=name,
+                    inst_ip=inst_ip,
                     user=os.environ['USER'].strip()
             ))
             subprocess.check_call(
-                'ssh -i {tempdir}/id_rsa root@{instance}.{zone}.{project}'
+                'ssh -o "StrictHostKeyChecking no" -i {tempdir}/id_rsa root@{inst_ip}'
                 ' -- \'bash -c "sudo pkill -u {user}; userdel -rf {user} && rm /root/.ssh/authorized_keys"\''.format(
-                    zone=zone,
-                    project=proj,
                     tempdir=tempdir,
-                    instance=name,
+                    inst_ip=inst_ip,
                     user=os.environ['USER'].strip()
                 ),
                 shell=True,

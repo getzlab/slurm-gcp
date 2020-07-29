@@ -151,32 +151,37 @@ LimitSTACK=infinity
 WantedBy=multi-user.target
 """)
 
+            inst_ip = subprocess.check_output(
+              "gcloud compute instances describe {instance} "
+              "--format='get(networkInterfaces[0].accessConfigs.natIP)' "
+              "--zone {zone} --project {project}".format(
+                zone=zone,
+                project=proj,
+                instance=name
+              ),
+              shell = True
+            ).strip().decode()
+
             subprocess.check_call(
-                'scp -i {tempdir}/id_rsa {tempdir}/slurmd.service root@{instance}.{zone}.{project}:/lib/systemd/system/slurmd.service'.format(
-                    zone=zone,
-                    project=proj,
+                'scp -o "StrictHostKeyChecking no" -i {tempdir}/id_rsa {tempdir}/slurmd.service root@{inst_ip}:/lib/systemd/system/slurmd.service'.format(
                     tempdir=tempdir,
-                    instance=name
+                    inst_ip=inst_ip
                 ),
                 shell=True
             )
 
             print(crayons.green("Logging in as root to clean user directories", bold=True))
-            print('ssh -i {tempdir}/id_rsa root@{instance}.{zone}.{project}'
+            print('ssh -o "StrictHostKeyChecking no" -i {tempdir}/id_rsa root@{inst_ip}'
                 ' -- \'bash -c "sudo pkill -u {user}; userdel -rf {user} && rm /root/.ssh/authorized_keys"\''.format(
-                    zone=zone,
-                    project=proj,
                     tempdir=tempdir,
-                    instance=name,
+                    inst_ip=inst_ip,
                     user=os.environ['USER'].strip()
             ))
             subprocess.check_call(
-                'ssh -i {tempdir}/id_rsa root@{instance}.{zone}.{project}'
+                'ssh -o "StrictHostKeyChecking no" -i {tempdir}/id_rsa root@{inst_ip}'
                 ' -- \'bash -c "sudo pkill -u {user}; userdel -rf {user} && rm /root/.ssh/authorized_keys"\''.format(
-                    zone=zone,
-                    project=proj,
                     tempdir=tempdir,
-                    instance=name,
+                    inst_ip=inst_ip,
                     user=os.environ['USER'].strip()
                 ),
                 shell=True,
