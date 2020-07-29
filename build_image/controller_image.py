@@ -174,11 +174,12 @@ def main(name, mtype, zone, proj, image_name, image_family):
         print(crayons.green("Generating image", bold=True))
         subprocess.check_call(
             'gcloud compute images create {} --source-disk {} --family {}'
-            ' --description "Canine Transient GCP backend controller boot image" --source-disk-zone {}'.format(
+            ' --description "Canine Transient GCP backend controller boot image" --source-disk-zone {} --project {}'.format(
                 image_name,
                 name,
                 image_family,
                 zone,
+                proj
             ),
             shell=True
         )
